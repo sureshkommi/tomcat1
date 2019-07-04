@@ -84,3 +84,56 @@
     - name : restart the tomcat
       shell : "nohup sh {{TOMCAT_PATH}}/{{TOMCAT_DIR}}/bin/shutdown.sh && nohup sh {{TOMCAT_PATH}}/{{TOMCAT_DIR}}/bin/startup.sh"
       when : out is success
+- name : create schema and tables for student
+  hosts : DB
+  become : yes
+  tasks :
+    - name : install mysql_python
+      yum :
+        name : MySQL-python
+        state : latest
+        
+    - name : define DEV DB variables
+      tags :
+        - DEV
+      set_fact :
+        DB_HOST : mariadb-server
+        DB_SCHEMA : studentdevapp
+        DB_USER : student
+        DB_PASSWORD : student@1
+        APP_HOST : student-dev-app-server
+
+    - name : define QA DB variables
+      tags :
+        - QA
+      set_fact :
+        DB_HOST : mariadb-server
+        DB_SCHEMA : studentqaapp
+        DB_USER : student
+        DB_PASSWORD : student@1
+        APP_HOST : student-qa-app-server
+
+    - name : define PROD DB variables
+      tags :
+        - PROD
+      set_fact :
+        DB_HOST : mariadb-server
+        DB_SCHEMA : studentprodapp
+        DB_USER : student
+        DB_PASSWORD : student@1
+        APP_HOST : student-prod-app-server
+
+    - name : template the studentapp.sql
+      tags :
+        - always
+      template :
+        src : /var/lib/jenkins/files/studentapp.sql.j2
+        dest : /tmp/studentapp.sql
+
+    - name : run studentapp.sql
+      tags :
+        - always
+      mysql_db :
+        state : import
+        name : all
+        target : /tmp/studentapp.sql
