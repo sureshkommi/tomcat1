@@ -1,0 +1,5 @@
+[dev]
+tomcat
+
+[db]
+mariadb
