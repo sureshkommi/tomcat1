@@ -1,0 +1,86 @@
+- name : create APP layer
+  hosts : DEV
+  become : yes
+  tags :
+    - APP
+  vars :
+    USERNAME : student
+    TOMCAT_PATH : /tomcat
+    TOMCAT_URL : http://redrockdigimark.com/apachemirror/tomcat/tomcat-9/v9.0.6/bin/apache-tomcat-9.0.6.tar.gz
+    WAR :
+      URL : https://github.com/devops2k18/DevOpsDecember/raw/master/APPSTACK/student.war
+      LOC : "{{TOMCAT_PATH}}/{{TOMCAT_DIR}}/webapps"
+    MYSQL :
+      URL : https://github.com/devops2k18/DevOpsDecember/raw/master/APPSTACK/mysql-connector-java-5.1.40.jar
+      LOC : "{{TOMCAT_PATH}}/{{TOMCAT_DIR}}/lib"
+  tasks :
+    - name : install java
+      yum :
+        name : java
+        state : latest
+
+    - name : create TOMCAT_DIR variable
+      shell : echo "{{TOMCAT_URL}}" | awk -F / '{print $NF}' | sed -e 's/.tar.gz//'
+      register : output
+
+    - name : define TOMCAT_DIR using set_fact
+      set_fact :
+        TOMCAT_DIR : "{{output.stdout}}"
+
+    - name : create an user for tomcat
+      user :
+        name : student
+
+    - name : create a directory for tomcat
+      file :
+        path : "{{TOMCAT_PATH}}"
+        state : directory
+        owner : "{{USERNAME}}"
+        group : "{{USERNAME}}"
+        mode : 0755
+
+    - name : downloading tomcat
+      unarchive :
+        src : "{{TOMCAT_URL}}"
+        dest : "{{TOMCAT_PATH}}"
+        remote_src: yes
+      become_user : "{{USERNAME}}"
+
+    - name : find the files and folders from webapps
+      find :
+        paths : "{{TOMCAT_PATH}}/{{TOMCAT_DIR}}/webapps"
+        file_type : any
+      register : out
+
+    - name : remove old artifacts
+      file :
+        path : "{{item.path}}"
+        state : absent
+      with_items : "{{out.files}}"
+
+    - name : download the student war file
+      get_url :
+        url : "{{item.URL}}"
+        dest : "{{item.LOC}}"
+      with_items :
+        - "{{WAR}}"
+        - "{{MYSQL}}"
+
+    - name : update the context.xml
+      blockinfile :
+        path : "{{TOMCAT_PATH}}/{{TOMCAT_DIR}}/conf/context.xml"
+        insertbefore : "</Context>"
+        block: |
+          <Resource name="jdbc/TestDB" auth="Container" type="javax.sql.DataSource" maxTotal="100" maxIdle="30"maxWaitMillis="10000" username="student" password="student@1" driverClassName="com.mysql.jdbc.Driver" url="jdbc:mysql://localhost:3306/studentapp"/>
+    - name : check tomcat running or not
+      shell : ps -ef | grep tomcat | grep -v grep
+      register : out
+      ignore_errors : true
+
+    - name : start the tomcat
+      shell : "nohup sh {{TOMCAT_PATH}}/{{TOMCAT_DIR}}/bin/startup.sh"
+      when : out is failed
+
+    - name : restart the tomcat
+      shell : "nohup sh {{TOMCAT_PATH}}/{{TOMCAT_DIR}}/bin/shutdown.sh && nohup sh {{TOMCAT_PATH}}/{{TOMCAT_DIR}}/bin/startup.sh"
+      when : out is success
