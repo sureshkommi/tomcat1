@@ -1,5 +1,5 @@
-[dev]
+[DEV]
 tomcat
 
-[db]
+[DB]
 mariadb
